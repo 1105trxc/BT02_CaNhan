@@ -1,0 +1,66 @@
+@startuml
+title UC02 - Login
+
+actor "User" as User
+boundary "Client (Web/App)" as Client
+participant "ValidationMiddleware" as ValidationMW
+participant "RateLimitMiddleware" as RateLimitMW
+participant "AuthController" as AuthController
+participant "AuthService" as AuthService
+participant "JwtService" as JwtService
+participant "BCrypt" as BCrypt
+entity "UserRepository" as UserRepo
+database "MongoDB" as DB
+
+User -> Client: Open login page
+User -> Client: Enter email, password
+Client -> AuthController: POST /auth/login (email, password)
+AuthController -> ValidationMW: validateRequired(email, password)
+alt Missing input
+  ValidationMW --> AuthController: 400 Validation error
+  AuthController --> Client: "Email and password are required"
+  Client --> User: Show error
+else Input valid
+  ValidationMW --> AuthController: OK
+  AuthController -> RateLimitMW: checkLoginAttempts(email, ip)
+  alt Too many failures
+    RateLimitMW --> AuthController: Block 15 minutes
+    AuthController --> Client: 429 Account locked temporarily
+    Client --> User: Show lock message
+  else Allowed
+    RateLimitMW --> AuthController: OK
+    AuthController -> AuthService: authenticate(email, password)
+    AuthService -> UserRepo: findByEmail(email)
+    UserRepo -> DB: Query user by email
+    DB --> UserRepo: User/None
+    alt User not found
+      UserRepo --> AuthService: None
+      AuthService --> AuthController: Invalid credentials
+      AuthController --> Client: 401 Invalid email or password
+      Client --> User: Show error
+    else User found
+      UserRepo --> AuthService: User
+      AuthService -> BCrypt: compare(password, passwordHash)
+      alt Password mismatch
+        BCrypt --> AuthService: False
+        AuthService --> RateLimitMW: recordFailure(email, ip)
+        AuthService --> AuthController: Invalid credentials
+        AuthController --> Client: 401 Invalid email or password
+        Client --> User: Show error
+      else Password match
+        BCrypt --> AuthService: True
+        AuthService -> JwtService: signJwt(userId, role)
+        JwtService --> AuthService: token
+        AuthService --> AuthController: Login success + role
+        AuthController --> Client: 200 {token, redirectUrl}
+        alt Role = User
+          Client --> User: Redirect to /user/profile
+        else Role = Admin
+          Client --> User: Redirect to /admin/profile
+        end
+      end
+    end
+  end
+end
+
+@enduml
