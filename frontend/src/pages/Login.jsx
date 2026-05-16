@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { Link, useNavigate } from 'react-router-dom';
-import { login, reset } from '../redux/authSlice';
+import { login, googleLogin, reset } from '../redux/authSlice';
 import InputField from '../components/InputField';
 import PrimaryButton from '../components/PrimaryButton';
 import Layout from '../components/Layout';
 import toast from 'react-hot-toast';
+import { useGoogleLogin } from '@react-oauth/google';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -33,7 +34,7 @@ const Login = () => {
     if (isSuccess && user) {
       toast.dismiss();
       toast.success('Login successful!');
-      navigate('/user/profile');
+      navigate('/');
       dispatch(reset());
     }
   }, [user, isError, isSuccess, message, navigate, dispatch]);
@@ -51,11 +52,26 @@ const Login = () => {
     dispatch(login({ email, password }));
   };
 
+  const handleGoogleLogin = useGoogleLogin({
+    onSuccess: (tokenResponse) => {
+      // In a real scenario with useGoogleLogin, we usually get an access_token.
+      // But for simple verification, we might need to handle it differently 
+      // or use GoogleLogin component for id_token.
+      // However, @react-oauth/google useGoogleLogin provides access_token.
+      // For this implementation, I'll assume we can use the credential from the standard GoogleLogin 
+      // OR I will adapt the backend to handle access_token.
+      // Let's use the Implicit flow for now if possible, but standard GoogleLogin is easier for id_token.
+      console.log(tokenResponse);
+      dispatch(googleLogin(tokenResponse.access_token));
+    },
+    onError: () => toast.error('Google Login Failed'),
+  });
+
   return (
     <Layout>
       <div className="container-fluid p-0" style={{ backgroundColor: '#f9fafb' }}>
         <div className="container-xl py-5">
-          <main className="row g-0 bg-white shadow-sm rounded-4 overflow-hidden mx-auto" style={{ maxWidth: '1100px', border: '1px solid #eee' }}>
+          <main className="row g-0 bg-white shadow-sm rounded-4 overflow-hidden mx-auto" style={{ maxWidth: '1200px', border: '1px solid #eee', minHeight: '700px' }}>
             {/* Left Side: Visual Section */}
             <div className="col-lg-6 d-none d-lg-flex flex-column justify-content-between p-5 text-white position-relative"
                  style={{ 
@@ -137,7 +153,7 @@ const Login = () => {
                       />
                       <label className="form-check-label text-muted" htmlFor="rememberMe">Remember me</label>
                     </div>
-                    <Link to="/forgot-password" size="small" className="text-dark fw-bold text-decoration-none">Forgot password?</Link>
+                    <Link to="/forgot-password" className="text-dark fw-bold text-decoration-none">Forgot password?</Link>
                   </div>
 
                   <PrimaryButton type="submit" isLoading={isLoading} className="py-3 rounded-3 mb-4 shadow-sm w-100 fw-bold">
@@ -151,14 +167,14 @@ const Login = () => {
                   </div>
 
                   <div className="row g-3 mb-5">
-                    <div className="col-6">
-                      <button type="button" className="btn btn-outline-light border text-dark w-100 py-2 d-flex align-items-center justify-content-center gap-2 hover-bg-light rounded-3 shadow-sm" style={{ fontSize: '13px', fontWeight: '500' }}>
-                        <i className="fa-brands fa-google text-danger"></i> Google
-                      </button>
-                    </div>
-                    <div className="col-6">
-                      <button type="button" className="btn btn-outline-light border text-dark w-100 py-2 d-flex align-items-center justify-content-center gap-2 hover-bg-light rounded-3 shadow-sm" style={{ fontSize: '13px', fontWeight: '500' }}>
-                        <i className="fa-brands fa-facebook-f text-primary"></i> Facebook
+                    <div className="col-12">
+                      <button 
+                        type="button" 
+                        onClick={() => handleGoogleLogin()}
+                        className="btn btn-outline-light border text-dark w-100 py-2 d-flex align-items-center justify-content-center gap-2 hover-bg-light rounded-3 shadow-sm" 
+                        style={{ fontSize: '13px', fontWeight: '500' }}
+                      >
+                        <i className="fa-brands fa-google text-danger"></i> Continue with Google
                       </button>
                     </div>
                   </div>
