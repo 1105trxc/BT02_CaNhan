@@ -25,6 +25,12 @@ const Login = () => {
   );
 
   useEffect(() => {
+    // If already logged in, go to homepage
+    if (user && !isLoading) {
+      navigate('/', { replace: true });
+      return;
+    }
+
     if (isError) {
       toast.dismiss();
       toast.error(message);
@@ -34,10 +40,10 @@ const Login = () => {
     if (isSuccess && user) {
       toast.dismiss();
       toast.success('Login successful!');
-      navigate('/');
+      navigate('/', { replace: true });
       dispatch(reset());
     }
-  }, [user, isError, isSuccess, message, navigate, dispatch]);
+  }, [user, isLoading, isError, isSuccess, message, navigate, dispatch]);
 
   const onChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -54,14 +60,7 @@ const Login = () => {
 
   const handleGoogleLogin = useGoogleLogin({
     onSuccess: (tokenResponse) => {
-      // In a real scenario with useGoogleLogin, we usually get an access_token.
-      // But for simple verification, we might need to handle it differently 
-      // or use GoogleLogin component for id_token.
-      // However, @react-oauth/google useGoogleLogin provides access_token.
-      // For this implementation, I'll assume we can use the credential from the standard GoogleLogin 
-      // OR I will adapt the backend to handle access_token.
-      // Let's use the Implicit flow for now if possible, but standard GoogleLogin is easier for id_token.
-      console.log(tokenResponse);
+  
       dispatch(googleLogin(tokenResponse.access_token));
     },
     onError: () => toast.error('Google Login Failed'),
@@ -167,14 +166,19 @@ const Login = () => {
                   </div>
 
                   <div className="row g-3 mb-5">
-                    <div className="col-12">
+                    <div className="col-6">
                       <button 
                         type="button" 
                         onClick={() => handleGoogleLogin()}
                         className="btn btn-outline-light border text-dark w-100 py-2 d-flex align-items-center justify-content-center gap-2 hover-bg-light rounded-3 shadow-sm" 
                         style={{ fontSize: '13px', fontWeight: '500' }}
                       >
-                        <i className="fa-brands fa-google text-danger"></i> Continue with Google
+                        <i className="fa-brands fa-google text-danger"></i> Google
+                      </button>
+                    </div>
+                    <div className="col-6">
+                      <button type="button" className="btn btn-outline-light border text-dark w-100 py-2 d-flex align-items-center justify-content-center gap-2 hover-bg-light rounded-3 shadow-sm" style={{ fontSize: '13px', fontWeight: '500' }}>
+                        <i className="fa-brands fa-facebook-f text-primary"></i> Facebook
                       </button>
                     </div>
                   </div>

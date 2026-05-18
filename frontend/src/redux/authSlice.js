@@ -1,7 +1,8 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5000/api/auth'; // Backend auth endpoint
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const API_URL = `${API_BASE}/auth`; // Backend auth endpoint
 
 export const sendOTP = createAsyncThunk(
   'auth/sendOTP',
@@ -88,14 +89,14 @@ export const updateProfile = createAsyncThunk(
   'auth/updateProfile',
   async (userData, thunkAPI) => {
     try {
-      const token = sessionStorage.getItem('token');
+      const token = localStorage.getItem('token');
       const config = {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       };
       const response = await axios.put(`${API_URL}/profile`, userData, config);
-      sessionStorage.setItem('user', JSON.stringify(response.data.data.user));
+      localStorage.setItem('user', JSON.stringify(response.data.data.user));
       return response.data;
     } catch (error) {
       let message = error.response?.data?.message || error.message || error.toString();
@@ -108,7 +109,7 @@ export const uploadAvatar = createAsyncThunk(
   'auth/uploadAvatar',
   async (formData, thunkAPI) => {
     try {
-      const token = sessionStorage.getItem('token');
+      const token = localStorage.getItem('token');
       const config = {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -116,7 +117,7 @@ export const uploadAvatar = createAsyncThunk(
         },
       };
       const response = await axios.post(`${API_URL}/profile/avatar`, formData, config);
-      sessionStorage.setItem('user', JSON.stringify(response.data.data.user));
+      localStorage.setItem('user', JSON.stringify(response.data.data.user));
       return response.data;
     } catch (error) {
       let message = error.response?.data?.message || error.message || error.toString();
@@ -131,8 +132,8 @@ export const googleLogin = createAsyncThunk(
     try {
       const response = await axios.post(`${API_URL}/google`, { tokenId });
       if (response.data.data) {
-        sessionStorage.setItem('user', JSON.stringify(response.data.data.user));
-        sessionStorage.setItem('token', response.data.data.token);
+        localStorage.setItem('user', JSON.stringify(response.data.data.user));
+        localStorage.setItem('token', response.data.data.token);
       }
       return response.data;
     } catch (error) {
@@ -145,7 +146,7 @@ export const googleLogin = createAsyncThunk(
 const authSlice = createSlice({
   name: 'auth',
   initialState: {
-    user: JSON.parse(sessionStorage.getItem('user')) || null,
+    user: JSON.parse(localStorage.getItem('user')) || null,
     isError: false,
     isSuccess: false,
     isLoading: false,
@@ -159,8 +160,8 @@ const authSlice = createSlice({
       state.message = '';
     },
     logout: (state) => {
-      sessionStorage.removeItem('user');
-      sessionStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
       state.user = null;
       state.isError = false;
       state.isSuccess = false;
@@ -191,8 +192,8 @@ const authSlice = createSlice({
         state.isSuccess = true;
         state.message = action.payload.message;
         state.user = action.payload.data.user;
-        sessionStorage.setItem('user', JSON.stringify(action.payload.data.user));
-        sessionStorage.setItem('token', action.payload.data.token);
+        localStorage.setItem('user', JSON.stringify(action.payload.data.user));
+        localStorage.setItem('token', action.payload.data.token);
       })
       .addCase(registerUser.rejected, (state, action) => {
         state.isLoading = false;
@@ -208,8 +209,8 @@ const authSlice = createSlice({
         state.isSuccess = true;
         state.message = action.payload.message;
         state.user = action.payload.data.user;
-        sessionStorage.setItem('user', JSON.stringify(action.payload.data.user));
-        sessionStorage.setItem('token', action.payload.data.token);
+        localStorage.setItem('user', JSON.stringify(action.payload.data.user));
+        localStorage.setItem('token', action.payload.data.token);
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false;

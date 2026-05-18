@@ -5,7 +5,6 @@ const OTP = require('../models/OTP');
 const authService = require('../services/authService');
 const responseHelper = require('../utils/responseHelper');
 const response = require('../utils/response');
-const { toCamelCase } = require('../utils/formatter');
 
 /**
  * @desc    Login user
@@ -71,16 +70,16 @@ exports.register = async (req, res, next) => {
       success: true,
       code: 201,
       message: 'Registration successful',
-      data: toCamelCase({
+      data: {
         token: result.token,
         user: {
           id: result.user._id,
-          fullName: result.user.full_name,
+          full_name: result.user.full_name,
           email: result.user.email,
           role: result.user.role,
-          avatarUrl: result.user.avatar_url || null
+          avatar_url: result.user.avatar_url || null
         }
-      }),
+      },
       timestamp: Math.floor(Date.now() / 1000)
     });
   } catch (error) {

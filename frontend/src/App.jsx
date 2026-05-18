@@ -6,14 +6,12 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Profile from './pages/Profile';
 import Home from './pages/Home';
+import ProductDetail from './pages/ProductDetail';
+import Search from './pages/Search';
 
 import { Toaster } from 'react-hot-toast';
 
-import { useSelector } from 'react-redux';
-
 function App() {
-  const { user } = useSelector((state) => state.auth);
-
   return (
     <Router>
       <Toaster position="top-center" reverseOrder={false} />
@@ -22,9 +20,12 @@ function App() {
         <Route path="/verify-otp" element={<VerifyOTP />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/user/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
-        <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
-        <Route path="/" element={<Home />} />
+        <Route path="/user/profile" element={<Profile />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/home" element={<Home />} />
+        <Route path="/product/:id" element={<ProductDetail />} />
+        <Route path="/search" element={<Search />} />
+        <Route path="/" element={<Navigate to="/home" />} />
       </Routes>
     </Router>
   );

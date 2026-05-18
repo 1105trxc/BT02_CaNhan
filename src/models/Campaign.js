@@ -10,7 +10,11 @@ const campaignSchema = new mongoose.Schema({
   end_at: { type: Date, required: true },
   status: { type: String, enum: ['active', 'inactive'], default: 'active' },
   type: { type: String }, // VD: Khuyến mãi mùa hè, Black Friday...
-  value: { type: Number } // Giá trị giảm giá chung nếu có
+  value: { type: Number }, // Giá trị giảm giá chung nếu có
+  targets: [{
+    target_type: { type: String }, // 'faculty', 'student_year'
+    target_value: { type: String }
+  }]
 }, { timestamps: true });
 
 module.exports = mongoose.model('Campaign', campaignSchema);
