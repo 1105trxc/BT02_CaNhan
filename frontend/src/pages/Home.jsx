@@ -4,26 +4,157 @@ import { useSelector, useDispatch } from 'react-redux';
 import { logout } from '../redux/authSlice';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import Header from '../components/Header';
+import Footer from '../components/Footer';
+import FABGroup from '../components/FABGroup';
+const AutoScrollCarousel = ({ items, renderItem }) => {
+  const scrollRef = React.useRef(null);
+  const [isHovered, setIsHovered] = React.useState(false);
+
+  React.useEffect(() => {
+    if (isHovered || !items || items.length === 0) return;
+
+    const container = scrollRef.current;
+    if (!container) return;
+
+    const interval = setInterval(() => {
+      if (container) {
+        container.scrollLeft += 1;
+        if (container.scrollLeft >= container.scrollWidth / 2) {
+          container.scrollLeft = 0;
+        }
+      }
+    }, 25);
+
+    return () => clearInterval(interval);
+  }, [isHovered, items]);
+
+  const duplicatedItems = items ? [...items, ...items] : [];
+
+  return (
+    <div 
+      ref={scrollRef}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onTouchStart={() => setIsHovered(true)}
+      onTouchEnd={() => setIsHovered(false)}
+      className="flex gap-6 overflow-x-auto py-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+      style={{ scrollBehavior: 'auto' }}
+    >
+      {duplicatedItems.map((item, idx) => (
+        <div key={`${item.id}-${idx}`} className="w-[260px] sm:w-[280px] flex-shrink-0 flex flex-col h-full">
+          {renderItem(item, idx % items.length)}
+        </div>
+      ))}
+    </div>
+  );
+};
 
 const Home = () => {
   const { user } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('recommended');
+  const cached = sessionStorage.getItem('homepage_cache');
+  const initialCache = cached ? JSON.parse(cached) : null;
+
+  const [data, setData] = useState(initialCache?.data || null);
+  const [loading, setLoading] = useState(!initialCache);
+  const [activeTab, setActiveTab] = useState(initialCache?.activeTab || 'recommended');
+  const [countdown, setCountdown] = useState({ hours: 0, minutes: 0, seconds: 0 });
+
+  // Tab-specific product lists and pagination
+  const [recommendedList, setRecommendedList] = useState(initialCache?.recommendedList || []);
+  const [bestSellersList, setBestSellersList] = useState(initialCache?.bestSellersList || []);
+  const [newArrivalsList, setNewArrivalsList] = useState(initialCache?.newArrivalsList || []);
+  const [mostViewedList, setMostViewedList] = useState(initialCache?.mostViewedList || []);
+  const [biggestDiscountsList, setBiggestDiscountsList] = useState(initialCache?.biggestDiscountsList || []);
+
+  const [recommendedPage, setRecommendedPage] = useState(initialCache?.recommendedPage || 1);
+  const [bestSellersPage, setBestSellersPage] = useState(initialCache?.bestSellersPage || 1);
+  const [newArrivalsPage, setNewArrivalsPage] = useState(initialCache?.newArrivalsPage || 1);
+  const [biggestDiscountsPage, setBiggestDiscountsPage] = useState(initialCache?.biggestDiscountsPage || 1);
+
+  // Horizontal pagination states (5 items per page)
+  const [flashSaleHorizPage, setFlashSaleHorizPage] = useState(initialCache?.flashSaleHorizPage || 0);
+  const [bestSellerHorizPage, setBestSellerHorizPage] = useState(initialCache?.bestSellerHorizPage || 0);
+  const [mostViewedHorizPage, setMostViewedHorizPage] = useState(initialCache?.mostViewedHorizPage || 0);
+
+  const [hasMoreRecommended, setHasMoreRecommended] = useState(initialCache?.hasMoreRecommended ?? true);
+  const [hasMoreBestSellers, setHasMoreBestSellers] = useState(initialCache?.hasMoreBestSellers ?? true);
+  const [hasMoreNewArrivals, setHasMoreNewArrivals] = useState(initialCache?.hasMoreNewArrivals ?? true);
+  const [hasMoreBiggestDiscounts, setHasMoreBiggestDiscounts] = useState(initialCache?.hasMoreBiggestDiscounts ?? true);
+
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // Lưu vị trí cuộn khi scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      sessionStorage.setItem('home_scroll_pos', window.scrollY);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Phục hồi vị trí cuộn khi render xong
+  useEffect(() => {
+    if (!loading) {
+      setTimeout(() => {
+        const savedPos = sessionStorage.getItem('home_scroll_pos');
+        if (savedPos) {
+          window.scrollTo({ top: parseInt(savedPos, 10), behavior: 'instant' });
+        }
+      }, 50);
+    }
+  }, [loading]);
+
+  // Tự động đồng bộ toàn bộ state trang chủ vào sessionStorage
+  useEffect(() => {
+    if (data) {
+      sessionStorage.setItem('homepage_cache', JSON.stringify({
+        data,
+        activeTab,
+        recommendedList,
+        bestSellersList,
+        newArrivalsList,
+        mostViewedList,
+        biggestDiscountsList,
+        recommendedPage,
+        bestSellersPage,
+        newArrivalsPage,
+        biggestDiscountsPage,
+        flashSaleHorizPage,
+        bestSellerHorizPage,
+        mostViewedHorizPage,
+        hasMoreRecommended,
+        hasMoreBestSellers,
+        hasMoreNewArrivals,
+        hasMoreBiggestDiscounts
+      }));
+    }
+  }, [data, activeTab, recommendedList, bestSellersList, newArrivalsList, mostViewedList, biggestDiscountsList, recommendedPage, bestSellersPage, newArrivalsPage, biggestDiscountsPage, flashSaleHorizPage, bestSellerHorizPage, mostViewedHorizPage, hasMoreRecommended, hasMoreBestSellers, hasMoreNewArrivals, hasMoreBiggestDiscounts]);
 
   useEffect(() => {
     const fetchHomeData = async () => {
       try {
         const response = await axios.get('http://localhost:5000/api/public/homepage');
         if (response.data.success) {
-          setData(response.data.data);
+          const resData = response.data.data;
+          setData(resData);
+          setRecommendedList(resData.recommended || []);
+          setBestSellersList(resData.bestSellers || []);
+          setNewArrivalsList(resData.newArrivals || []);
+          setMostViewedList(resData.mostViewed || []);
+          setBiggestDiscountsList(resData.biggestDiscounts || []);
+
+          setHasMoreRecommended((resData.recommended || []).length >= 10);
+          setHasMoreBestSellers((resData.bestSellers || []).length >= 10);
+          setHasMoreNewArrivals((resData.newArrivals || []).length >= 10);
+          setHasMoreBiggestDiscounts((resData.biggestDiscounts || []).length >= 10);
         }
       } catch (error) {
         console.error('Error fetching home data:', error);
-        toast.error('Không thể tải dữ liệu trang chủ');
+        if (!initialCache) toast.error('Unable to load homepage data');
       } finally {
         setLoading(false);
       }
@@ -31,6 +162,82 @@ const Home = () => {
 
     fetchHomeData();
   }, []);
+
+  // Countdown timer for flash sale
+  useEffect(() => {
+    const campaign = data?.campaign;
+    if (!campaign?.endAt) return;
+
+    const updateCountdown = () => {
+      const now = new Date().getTime();
+      const end = new Date(campaign.endAt).getTime();
+      const diff = Math.max(0, end - now);
+
+      setCountdown({
+        hours: String(Math.floor(diff / (1000 * 60 * 60))).padStart(2, '0'),
+        minutes: String(Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))).padStart(2, '0'),
+        seconds: String(Math.floor((diff % (1000 * 60)) / 1000)).padStart(2, '0')
+      });
+    };
+
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 1000);
+    return () => clearInterval(timer);
+  }, [data?.campaign]);
+
+  const handleLoadMore = async () => {
+    if (loadingMore) return;
+    setLoadingMore(true);
+
+    try {
+      let nextPage = 1;
+      let sortParam = '';
+
+      if (activeTab === 'recommended') {
+        nextPage = recommendedPage + 1;
+        sortParam = ''; // Default sorting
+      } else if (activeTab === 'biggest-discounts') {
+        nextPage = biggestDiscountsPage + 1;
+        sortParam = 'biggest_discount';
+      } else if (activeTab === 'new-arrivals') {
+        nextPage = newArrivalsPage + 1;
+        sortParam = 'oldest';
+      }
+
+      const response = await axios.get(`http://localhost:5000/api/public/products`, {
+        params: {
+          sort: sortParam,
+          page: nextPage,
+          limit: 10
+        }
+      });
+
+      if (response.data.success) {
+        const newProducts = response.data.data;
+        const meta = response.data.meta;
+        const totalPages = meta?.pagination?.totalPages || 1;
+
+        if (activeTab === 'recommended') {
+          setRecommendedList(prev => [...prev, ...newProducts]);
+          setRecommendedPage(nextPage);
+          setHasMoreRecommended(nextPage < totalPages && newProducts.length > 0);
+        } else if (activeTab === 'biggest-discounts') {
+          setBiggestDiscountsList(prev => [...prev, ...newProducts]);
+          setBiggestDiscountsPage(nextPage);
+          setHasMoreBiggestDiscounts(nextPage < totalPages && newProducts.length > 0);
+        } else if (activeTab === 'new-arrivals') {
+          setNewArrivalsList(prev => [...prev, ...newProducts]);
+          setNewArrivalsPage(nextPage);
+          setHasMoreNewArrivals(nextPage < totalPages && newProducts.length > 0);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading more products:', error);
+      toast.error('Unable to load more products');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -40,48 +247,23 @@ const Home = () => {
     );
   }
 
-  const { banners, categories, flashDeals, newArrivals, bestSellers, campaign } = data || {};
+  const { banners, categories, flashDeals, campaign } = data || {};
+
+  const currentList = activeTab === 'recommended' 
+    ? recommendedList 
+    : activeTab === 'biggest-discounts' 
+    ? biggestDiscountsList 
+    : newArrivalsList;
+
+  const currentHasMore = activeTab === 'recommended'
+    ? hasMoreRecommended
+    : activeTab === 'biggest-discounts'
+    ? hasMoreBiggestDiscounts
+    : hasMoreNewArrivals;
 
   return (
     <div className="text-[#131b2e] min-h-screen bg-[#faf8ff] font-['Manrope']">
-      {/* Header */}
-      <header className="bg-white shadow-[0px_4px_20px_rgba(15,23,42,0.05)] sticky top-0 z-50 font-medium text-[#131b2e]">
-        <div className="flex justify-between items-center w-full px-margin-mobile md:px-margin-desktop py-4 max-w-container-max mx-auto gap-8">
-          <div className="flex items-center gap-8">
-            <Link className="font-['Manrope'] text-2xl text-[#004ac6] tracking-tight font-extrabold" to="/">UTEShop</Link>
-            <nav className="hidden md:flex gap-6">
-              <Link className="text-sm font-medium text-[#004ac6] underline underline-offset-8 decoration-2" to="/">Home</Link>
-              <Link className="text-sm font-medium text-[#434655] hover:text-[#004ac6] transition-colors" to="/shop">Shop</Link>
-              <Link className="text-sm font-medium text-[#434655] hover:text-[#004ac6] transition-colors" to="/promotions">Promotions</Link>
-              <Link className="text-sm font-medium text-[#434655] hover:text-[#004ac6] transition-colors" to="/blog">Blog</Link>
-              <Link className="text-sm font-medium text-[#434655] hover:text-[#004ac6] transition-colors" to="/support">Support</Link>
-            </nav>
-          </div>
-          
-          <div className="hidden lg:flex flex-1 max-w-md relative group">
-            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#434655] group-focus-within:text-[#004ac6] transition-colors">search</span>
-            <input type="text" placeholder="Search for academic collections..." className="w-full bg-[#f7f9ff] border-none rounded-full py-2.5 pl-12 pr-4 text-sm focus:ring-2 focus:ring-[#004ac6]/20 transition-all outline-none" />
-          </div>
-
-          <div className="flex items-center gap-4">
-            <button className="lg:hidden p-2 hover:bg-[#f7f9ff] rounded-full transition-all duration-200">
-              <span className="material-symbols-outlined text-[#434655]">search</span>
-            </button>
-            <Link to="/cart" className="p-2 hover:bg-[#f7f9ff] rounded-full transition-all duration-200 relative text-[#434655]">
-              <span className="material-symbols-outlined">shopping_cart</span>
-              <span className="absolute top-1 right-1 w-4 h-4 bg-[#004ac6] text-[10px] text-white flex items-center justify-center rounded-full font-bold">3</span>
-            </Link>
-            <button className="p-2 hover:bg-[#f7f9ff] rounded-full transition-all duration-200 text-[#434655] relative">
-              <span className="material-symbols-outlined">notifications</span>
-              <span className="absolute top-2 right-2 w-2 h-2 bg-[#b3261e] rounded-full"></span>
-            </button>
-            <Link to="/user/profile" className="flex items-center gap-2 p-1 pr-3 hover:bg-[#f7f9ff] rounded-full transition-all duration-200 border border-[#c3c6d7]/30">
-              <img src={user?.avatarUrl || `https://ui-avatars.com/api/?name=${user?.fullName}&background=random`} alt="Avatar" className="w-8 h-8 rounded-full object-cover" />
-              <span className="text-sm font-bold text-[#131b2e] hidden md:block tracking-tight">{user?.fullName || 'Guest'}</span>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       <main className="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-8 space-y-12">
         
@@ -93,9 +275,9 @@ const Home = () => {
             </div>
             <nav className="p-2">
               {categories?.map((cat, idx) => (
-                <Link key={cat.id} to={`/category/${cat.slug}`} className={`category-item flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium ${idx === 0 ? 'active' : 'text-[#434655]'}`}>
+                <Link key={cat.id} to={`/search?category=${cat.slug}`} className={`category-item flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium ${idx === 0 ? 'active' : 'text-[#434655]'}`}>
                   <span className="material-symbols-outlined text-[20px]">
-                    {cat.slug.includes('electronics') ? 'devices' : cat.slug.includes('fashion') ? 'apparel' : cat.slug.includes('book') ? 'menu_book' : 'category'}
+                    {cat.slug.includes('may-tinh') ? 'computer' : cat.slug.includes('dien-thoai') ? 'smartphone' : cat.slug.includes('dong-ho') ? 'watch' : cat.slug.includes('may-anh') ? 'photo_camera' : cat.slug.includes('women') || cat.slug.includes('men') || cat.slug.includes('fashion') ? 'apparel' : cat.slug.includes('book') ? 'menu_book' : 'category'}
                   </span>
                   {cat.name}
                 </Link>
@@ -115,7 +297,7 @@ const Home = () => {
               </h1>
               <p className="text-white/80 text-lg">Engineered for focus. Curated for performance. Discover the intersection of sophisticated design and academic utility.</p>
               <div className="flex gap-4 pt-4">
-                <Link to="/shop" className="bg-[#004ac6] text-white px-8 py-3 rounded-full font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-[#004ac6]/20">Explore the Collection</Link>
+                <Link to="/search" className="bg-[#004ac6] text-white px-8 py-3 rounded-full font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-[#004ac6]/20">Explore the Collection</Link>
                 <Link to="#" className="bg-white/10 backdrop-blur-md text-white border border-white/20 px-8 py-3 rounded-full font-bold hover:bg-white/20 transition-colors">View Lookbook</Link>
               </div>
             </div>
@@ -131,14 +313,14 @@ const Home = () => {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {[
-              { icon: 'precision_manufacturing', label: 'Engineering' },
-              { icon: 'architecture', label: 'Design & Art' },
-              { icon: 'payments', label: 'Business' },
-              { icon: 'biotech', label: 'Sciences' },
-              { icon: 'history_edu', label: 'Humanities' },
-              { icon: 'balance', label: 'Law & Policy' },
+              { icon: 'precision_manufacturing', label: 'Engineering', slug: 'may-tinh' },
+              { icon: 'architecture', label: 'Design & Art', slug: 'women' },
+              { icon: 'payments', label: 'Business', slug: 'men' },
+              { icon: 'biotech', label: 'Sciences', slug: 'dien-thoai' },
+              { icon: 'history_edu', label: 'Humanities', slug: 'accessories' },
+              { icon: 'balance', label: 'Law & Policy', slug: 'bags' },
             ].map((d, i) => (
-              <button key={i} className="group p-4 bg-white border border-[#c3c6d7] rounded-2xl hover:border-[#004ac6] transition-all text-center">
+              <button key={i} onClick={() => navigate(`/search?category=${d.slug}`)} className="group p-4 bg-white border border-[#c3c6d7] rounded-2xl hover:border-[#004ac6] transition-all text-center">
                 <span className="material-symbols-outlined text-3xl mb-2 text-[#434655] group-hover:text-[#004ac6] transition-colors">{d.icon}</span>
                 <p className="text-xs font-bold uppercase tracking-wide">{d.label}</p>
               </button>
@@ -148,72 +330,202 @@ const Home = () => {
 
         {/* Flash Deals */}
         <section className="space-y-6">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-red-500 fill-1 animate-pulse">bolt</span>
-                <h2 className="text-2xl font-extrabold tracking-tight">Flash Sale: {campaign?.name || 'The Lab Edition'}</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#c3c6d7] pb-4 gap-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-3xl text-red-500 fill-1 animate-pulse">bolt</span>
+                <div>
+                  <h2 className="text-xl md:text-2xl font-extrabold tracking-tight">Flash Sale: {campaign?.name || 'The Lab Edition'}</h2>
+                  <p className="text-xs text-[#434655]">Limited time offers with incredible discounts</p>
+                </div>
               </div>
-              <div className="flex items-center gap-3 ml-4">
+              <div className="flex items-center gap-2 pl-0 sm:pl-4 border-l-0 sm:border-l border-[#c3c6d7]">
                 <div className="flex flex-col items-center">
-                  <div className="bg-[#131b2e] text-white px-3 py-1.5 rounded-lg text-sm font-bold font-mono shadow-sm">02</div>
-                  <span className="text-[8px] uppercase font-bold mt-1 opacity-50">Hrs</span>
+                  <div className="bg-[#131b2e] text-white px-3 py-1.5 rounded-lg text-sm font-bold font-mono shadow-sm">{countdown.hours}</div>
+                  <span className="text-[8px] uppercase font-bold mt-1 text-[#434655]">Hrs</span>
                 </div>
-                <span className="font-bold mb-4">:</span>
+                <span className="font-bold mb-4 text-[#131b2e]">:</span>
                 <div className="flex flex-col items-center">
-                  <div className="bg-[#131b2e] text-white px-3 py-1.5 rounded-lg text-sm font-bold font-mono shadow-sm">45</div>
-                  <span className="text-[8px] uppercase font-bold mt-1 opacity-50">Min</span>
+                  <div className="bg-[#131b2e] text-white px-3 py-1.5 rounded-lg text-sm font-bold font-mono shadow-sm">{countdown.minutes}</div>
+                  <span className="text-[8px] uppercase font-bold mt-1 text-[#434655]">Min</span>
                 </div>
-                <span className="font-bold mb-4">:</span>
+                <span className="font-bold mb-4 text-[#131b2e]">:</span>
                 <div className="flex flex-col items-center">
-                  <div className="bg-[#131b2e] text-white px-3 py-1.5 rounded-lg text-sm font-bold font-mono shadow-sm">12</div>
-                  <span className="text-[8px] uppercase font-bold mt-1 opacity-50">Sec</span>
+                  <div className="bg-[#131b2e] text-white px-3 py-1.5 rounded-lg text-sm font-bold font-mono shadow-sm">{countdown.seconds}</div>
+                  <span className="text-[8px] uppercase font-bold mt-1 text-[#434655]">Sec</span>
                 </div>
               </div>
             </div>
-            <Link to="/deals" className="text-sm font-bold text-[#004ac6] hover:underline">View All Deals</Link>
+            <div className="flex items-center gap-4 self-end sm:self-auto">
+              <Link to="/search?sort=top_rated" className="text-sm font-bold text-[#004ac6] hover:underline hidden sm:block">View All</Link>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {flashDeals?.map((product) => (
-              <div key={product.id} className="product-card bg-white border border-[#c3c6d7] rounded-2xl overflow-hidden flex flex-col group cursor-pointer">
-                <Link to={`/product/${product.slug}`} className="aspect-[4/3] bg-[#eaedff] relative block overflow-hidden">
-                  <img src={product.media?.[0] || "https://via.placeholder.com/400x300"} alt={product.name} className="w-full h-full object-cover p-2 group-hover:scale-110 transition-transform duration-500" />
-                  <div className="absolute top-3 left-3 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-lg">
-                    -{Math.round((1 - product.sellingPrice / product.mrpPrice) * 100)}%
-                  </div>
-                </Link>
-                <div className="p-4 flex-grow flex flex-col">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10px] font-bold text-[#004ac6] uppercase tracking-widest">Tech Essential</span>
-                    <span className="text-[10px] font-medium text-[#434655] flex items-center gap-1"><span className="material-symbols-outlined text-[12px] fill-1 text-amber-500">star</span> {product.averageRating || 5.0}</span>
-                  </div>
-                  <Link to={`/product/${product.slug}`} className="font-bold text-sm line-clamp-2 hover:text-[#004ac6] transition-colors block mb-3 min-h-[2.5rem]">{product.name}</Link>
-                  
-                  <div className="mt-auto space-y-3">
-                    <div className="space-y-1">
-                      <div className="flex items-baseline gap-2">
-                        <span className="font-bold text-[#004ac6]">{product.sellingPrice.toLocaleString()}₫</span>
-                        <span className="text-xs text-[#434655] line-through">{product.mrpPrice.toLocaleString()}₫</span>
-                      </div>
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-[10px] font-bold text-[#434655] uppercase">
-                          <span>Sold 65%</span>
-                        </div>
-                        <div className="h-1 bg-[#e1e4f5] rounded-full overflow-hidden">
-                          <div className="h-full bg-[#004ac6]" style={{ width: '65%' }}></div>
-                        </div>
-                      </div>
+          {(!flashDeals || flashDeals.length === 0) ? (
+            <div className="bg-white border border-[#c3c6d7] rounded-2xl p-12 text-center text-[#434655]">
+              <span className="material-symbols-outlined text-4xl mb-3 text-[#004ac6]">bolt</span>
+              <p className="text-base font-bold text-[#131b2e]">No Active Flash Sale</p>
+              <p className="text-xs mt-1">Flash deals are currently being prepared. Please check back later.</p>
+            </div>
+          ) : (
+            <AutoScrollCarousel 
+              items={flashDeals}
+              renderItem={(product) => (
+                <div key={product.id} className="product-card bg-[#faf8ff] border border-[#c3c6d7] rounded-2xl overflow-hidden flex flex-col group cursor-pointer hover:shadow-md transition-all relative h-full">
+                  <Link to={`/product/${product.slug}`} className="aspect-square bg-[#eaedff] relative block overflow-hidden">
+                    <img src={product.media?.[0] || "https://via.placeholder.com/400x300"} alt={product.name} className="w-full h-full object-cover p-2 group-hover:scale-105 transition-transform duration-500" />
+                    <div className="absolute top-3 left-3 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-lg">
+                      -{Math.round((1 - product.sellingPrice / product.mrpPrice) * 100)}%
                     </div>
-                    <button className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#004ac6] text-white rounded-xl font-bold text-xs hover:bg-blue-700 transition-all active:scale-95 shadow-sm">
-                      <span className="material-symbols-outlined text-sm">shopping_cart</span>
-                      Add to Cart
-                    </button>
+                  </Link>
+                  <div className="p-4 flex-grow flex flex-col justify-between space-y-3">
+                    <Link to={`/product/${product.slug}`} className="font-bold text-sm leading-5 h-10 line-clamp-2 overflow-hidden hover:text-[#004ac6] transition-colors">{product.name}</Link>
+                    
+                    <div className="space-y-3 pt-2 border-t border-[#c3c6d7]/30">
+                      <div className="space-y-2">
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-bold text-[#004ac6]">{product.sellingPrice.toLocaleString()}₫</span>
+                          <span className="text-xs text-[#434655] line-through">{product.mrpPrice.toLocaleString()}₫</span>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[10px] font-bold text-[#434655] uppercase">
+                            <span>Sold {product.soldCount || 0}</span>
+                          </div>
+                          <div className="h-1.5 bg-[#e1e4f5] rounded-full overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-amber-500 to-red-500" style={{ width: `${Math.min(100, ((product.soldCount || 10) / 100) * 100)}%` }}></div>
+                          </div>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); toast.success('Added to cart successfully!'); }}
+                        className="w-full flex items-center justify-center gap-2 py-2 bg-[#004ac6]/10 text-[#004ac6] rounded-xl font-bold text-xs hover:bg-[#004ac6] hover:text-white transition-all active:scale-95 shadow-sm"
+                      >
+                        <span className="material-symbols-outlined text-sm">shopping_cart</span>
+                        Add to Cart
+                      </button>
+                    </div>
                   </div>
                 </div>
+              )}
+            />
+          )}
+        </section>
+
+        {/* Top 10 Best Sellers (Horizontal Pagination) */}
+        <section className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#c3c6d7] pb-4 gap-4">
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-3xl text-amber-500">local_fire_department</span>
+              <div>
+                <h2 className="text-xl md:text-2xl font-extrabold tracking-tight">Top 10 Best Sellers</h2>
+                <p className="text-xs text-[#434655]">Most popular and highly purchased products this month</p>
               </div>
-            ))}
+            </div>
+            <div className="flex items-center gap-4 self-end sm:self-auto">
+              <Link to="/search?sort=best_sellers" className="text-sm font-bold text-[#004ac6] hover:underline hidden sm:block">View All</Link>
+            </div>
           </div>
+
+          <AutoScrollCarousel 
+            items={bestSellersList}
+            renderItem={(product, idx) => {
+              const actualRank = idx + 1;
+              return (
+                <div key={product.id} className="product-card bg-[#faf8ff] border border-[#c3c6d7] rounded-2xl overflow-hidden flex flex-col group cursor-pointer hover:shadow-md transition-all relative h-full">
+                  <Link to={`/product/${product.slug}`} className="aspect-square bg-[#eaedff] relative block overflow-hidden">
+                    <img src={product.media?.[0] || "https://via.placeholder.com/400"} alt={product.name} className="w-full h-full object-cover p-2 group-hover:scale-105 transition-transform duration-500" />
+                    <div className={`absolute top-3 left-3 w-8 h-8 flex items-center justify-center text-white text-xs font-black rounded-full shadow-lg ${actualRank === 1 ? 'bg-amber-500 ring-4 ring-amber-500/30' : actualRank === 2 ? 'bg-[#c0c0c0] ring-4 ring-[#c0c0c0]/30' : actualRank === 3 ? 'bg-[#cd7f32] ring-4 ring-[#cd7f32]/30' : 'bg-[#131b2e]'}`}>
+                      #{actualRank}
+                    </div>
+                    <div className="absolute top-3 right-3 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-md uppercase tracking-tight">
+                      BEST SELLER
+                    </div>
+                  </Link>
+                  <div className="p-4 flex-grow flex flex-col justify-between space-y-3">
+                    <Link to={`/product/${product.slug}`} className="font-bold text-sm leading-5 h-10 line-clamp-2 overflow-hidden hover:text-[#004ac6] transition-colors">{product.name}</Link>
+                    <div className="space-y-3 pt-2 border-t border-[#c3c6d7]/30">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-[#004ac6]">{product.sellingPrice?.toLocaleString()}₫</span>
+                          <span className="flex items-center gap-0.5 text-amber-500 text-xs font-bold"><span className="material-symbols-outlined text-[14px] fill-1">star</span> {product.averageRating || 5.0}</span>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[10px] font-bold text-[#434655] uppercase">
+                            <span>Sold {product.soldCount || 0}</span>
+                          </div>
+                          <div className="h-1.5 bg-[#e1e4f5] rounded-full overflow-hidden">
+                            <div className="h-full bg-gradient-to-r from-amber-500 to-red-500" style={{ width: `${Math.min(100, ((product.soldCount || 10) / 100) * 100)}%` }}></div>
+                          </div>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); toast.success('Added to cart successfully!'); }}
+                        className="w-full flex items-center justify-center gap-2 py-2 bg-[#004ac6]/10 text-[#004ac6] rounded-xl font-bold text-xs hover:bg-[#004ac6] hover:text-white transition-all active:scale-95 shadow-sm"
+                      >
+                        <span className="material-symbols-outlined text-sm">shopping_cart</span>
+                        Add to Cart
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            }}
+          />
+        </section>
+
+        {/* Top 10 Most Viewed (Horizontal Pagination) */}
+        <section className="space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#c3c6d7] pb-4 gap-4">
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-3xl text-[#004ac6]">visibility</span>
+              <div>
+                <h2 className="text-xl md:text-2xl font-extrabold tracking-tight">Top 10 Most Viewed Products</h2>
+                <p className="text-xs text-[#434655]">Products attracting the highest attention and engagement</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-4 self-end sm:self-auto">
+              <Link to="/search?sort=most_viewed" className="text-sm font-bold text-[#004ac6] hover:underline hidden sm:block">View All</Link>
+            </div>
+          </div>
+
+          <AutoScrollCarousel 
+            items={mostViewedList}
+            renderItem={(product, idx) => {
+              const actualRank = idx + 1;
+              return (
+                <div key={product.id} className="product-card bg-[#faf8ff] border border-[#c3c6d7] rounded-2xl overflow-hidden flex flex-col group cursor-pointer hover:shadow-md transition-all relative h-full">
+                  <Link to={`/product/${product.slug}`} className="aspect-square bg-[#eaedff] relative block overflow-hidden">
+                    <img src={product.media?.[0] || "https://via.placeholder.com/400"} alt={product.name} className="w-full h-full object-cover p-2 group-hover:scale-105 transition-transform duration-500" />
+                    <div className={`absolute top-3 left-3 w-8 h-8 flex items-center justify-center text-white text-xs font-black rounded-full shadow-lg ${actualRank === 1 ? 'bg-amber-500 ring-4 ring-amber-500/30' : actualRank === 2 ? 'bg-[#c0c0c0] ring-4 ring-[#c0c0c0]/30' : actualRank === 3 ? 'bg-[#cd7f32] ring-4 ring-[#cd7f32]/30' : 'bg-[#131b2e]'}`}>
+                      #{actualRank}
+                    </div>
+                  </Link>
+                  <div className="p-4 flex-grow flex flex-col justify-between space-y-3">
+                    <Link to={`/product/${product.slug}`} className="font-bold text-sm leading-5 h-10 line-clamp-2 overflow-hidden hover:text-[#004ac6] transition-colors">{product.name}</Link>
+                    <div className="space-y-3 pt-2 border-t border-[#c3c6d7]/30">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-[#004ac6]">{product.sellingPrice?.toLocaleString()}₫</span>
+                          <span className="flex items-center gap-0.5 text-amber-500 text-xs font-bold"><span className="material-symbols-outlined text-[14px] fill-1">star</span> {product.averageRating || 5.0}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] font-bold text-[#434655] pt-1">
+                          <span className="flex items-center gap-1 text-[#004ac6]"><span className="material-symbols-outlined text-[14px]">visibility</span> {product.viewCount || 0} views</span>
+                          <span className="text-[#434655]">Sold {product.soldCount || 0}</span>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); toast.success('Added to cart successfully!'); }}
+                        className="w-full flex items-center justify-center gap-2 py-2 bg-[#004ac6]/10 text-[#004ac6] rounded-xl font-bold text-xs hover:bg-[#004ac6] hover:text-white transition-all active:scale-95 shadow-sm"
+                      >
+                        <span className="material-symbols-outlined text-sm">shopping_cart</span>
+                        Add to Cart
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            }}
+          />
         </section>
 
         {/* Product Exploration */}
@@ -221,43 +533,69 @@ const Home = () => {
           <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-[#c3c6d7] gap-4">
             <div className="flex gap-8">
               <button onClick={() => setActiveTab('recommended')} className={`tab-btn pb-4 text-sm font-bold ${activeTab === 'recommended' ? 'active text-[#004ac6]' : 'text-[#434655] hover:text-[#004ac6]'}`}>Recommended</button>
-              <button onClick={() => setActiveTab('best-sellers')} className={`tab-btn pb-4 text-sm font-bold ${activeTab === 'best-sellers' ? 'active text-[#004ac6]' : 'text-[#434655] hover:text-[#004ac6]'}`}>Best Sellers</button>
+              <button onClick={() => setActiveTab('biggest-discounts')} className={`tab-btn pb-4 text-sm font-bold ${activeTab === 'biggest-discounts' ? 'active text-[#004ac6]' : 'text-[#434655] hover:text-[#004ac6]'}`}>Biggest Discounts</button>
               <button onClick={() => setActiveTab('new-arrivals')} className={`tab-btn pb-4 text-sm font-bold ${activeTab === 'new-arrivals' ? 'active text-[#004ac6]' : 'text-[#434655] hover:text-[#004ac6]'}`}>New Arrivals</button>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
-            {(activeTab === 'new-arrivals' ? newArrivals : activeTab === 'best-sellers' ? bestSellers : newArrivals)?.map((product) => (
-              <div key={product.id} className="product-card bg-white border border-[#c3c6d7] rounded-2xl overflow-hidden flex flex-col group cursor-pointer">
-                <Link to={`/product/${product.slug}`} className="aspect-square bg-[#eaedff] relative block overflow-hidden">
-                  <img src={product.media?.[0] || "https://via.placeholder.com/400"} alt={product.name} className="w-full h-full object-cover p-2 group-hover:scale-105 transition-transform duration-500" />
-                  <div className="absolute top-3 left-3 bg-[#004ac6] text-white text-[10px] font-bold px-2 py-1 rounded shadow-md uppercase tracking-tight">CAMPUS TREND</div>
-                </Link>
-                <div className="p-4 flex-grow flex flex-col">
-                  <Link to={`/product/${product.slug}`} className="font-bold text-sm line-clamp-2 leading-snug hover:text-[#004ac6] transition-colors block mb-2 min-h-[2.5rem]">{product.name}</Link>
-                  <div className="mt-auto space-y-3">
-                    <div className="flex flex-col gap-1">
-                      <span className="font-bold text-[#004ac6]">{product.sellingPrice.toLocaleString()}₫</span>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] text-[#434655]">Lifestyle</span>
-                        <span className="text-[10px] text-[#434655] ml-auto flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px] fill-1 text-amber-500">star</span> {product.averageRating || 5.0}</span>
-                      </div>
+          {!currentList || currentList.length === 0 ? (
+            <div className="bg-white border border-[#c3c6d7] rounded-2xl p-12 text-center text-[#434655]">
+              <span className="material-symbols-outlined text-4xl mb-3 text-[#004ac6]">inventory_2</span>
+              <p className="text-base font-bold text-[#131b2e]">No products in this category</p>
+              <p className="text-xs mt-1">Products are currently being updated. Please check back later.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+              {currentList.map((product) => (
+                <div key={product.id} className="product-card bg-white border border-[#c3c6d7] rounded-2xl overflow-hidden flex flex-col group cursor-pointer">
+                  <Link to={`/product/${product.slug}`} className="aspect-square bg-[#eaedff] relative block overflow-hidden">
+                    <img src={product.media?.[0] || "https://via.placeholder.com/400"} alt={product.name} className="w-full h-full object-cover p-2 group-hover:scale-105 transition-transform duration-500" />
+                    <div className={`absolute top-3 left-3 text-white text-[10px] font-bold px-2 py-1 rounded shadow-md uppercase tracking-tight ${activeTab === 'biggest-discounts' ? 'bg-red-500' : activeTab === 'new-arrivals' ? 'bg-emerald-600' : 'bg-[#004ac6]'}`}>
+                      {activeTab === 'biggest-discounts' ? (product.mrpPrice && product.mrpPrice > product.sellingPrice ? `-${Math.round((1 - product.sellingPrice / product.mrpPrice) * 100)}% OFF` : 'TOP DEAL') : activeTab === 'new-arrivals' ? 'NEW ARRIVAL' : 'CAMPUS TREND'}
                     </div>
-                    <button className="w-full flex items-center justify-center gap-2 py-2 bg-[#004ac6]/10 text-[#004ac6] rounded-xl font-bold text-xs hover:bg-[#004ac6] hover:text-white transition-all active:scale-95">
-                      <span className="material-symbols-outlined text-sm">shopping_cart</span>
-                      Add to Cart
-                    </button>
+                  </Link>
+                  <div className="p-4 flex-grow flex flex-col">
+                    <Link to={`/product/${product.slug}`} className="font-bold text-sm leading-5 h-10 line-clamp-2 overflow-hidden hover:text-[#004ac6] transition-colors mb-2">{product.name}</Link>
+                    <div className="mt-auto space-y-3">
+                      <div className="flex flex-col gap-1">
+                        <span className="font-bold text-[#004ac6]">{product.sellingPrice.toLocaleString()}₫</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-[#434655]">Sold {product.soldCount || 0}</span>
+                          <span className="text-[10px] text-[#434655] ml-auto flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px] fill-1 text-amber-500">star</span> {product.averageRating || 5.0} ({product.reviewCount || 0})</span>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); toast.success('Added to cart successfully!'); }}
+                        className="w-full flex items-center justify-center gap-2 py-2 bg-[#004ac6]/10 text-[#004ac6] rounded-xl font-bold text-xs hover:bg-[#004ac6] hover:text-white transition-all active:scale-95"
+                      >
+                        <span className="material-symbols-outlined text-sm">shopping_cart</span>
+                        Add to Cart
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
-          <div className="flex justify-center pt-8">
-            <button className="px-12 py-3 rounded-xl border-2 border-[#004ac6] text-[#004ac6] font-bold hover:bg-[#004ac6] hover:text-white transition-all duration-300">
-              Load More Products
-            </button>
-          </div>
+          {currentHasMore && (
+            <div className="flex justify-center pt-8">
+              <button 
+                onClick={handleLoadMore} 
+                disabled={loadingMore} 
+                className="px-12 py-3 rounded-xl border-2 border-[#004ac6] text-[#004ac6] font-bold hover:bg-[#004ac6] hover:text-white transition-all duration-300 disabled:opacity-50 flex items-center gap-2"
+              >
+                {loadingMore ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-current"></div>
+                    Loading...
+                  </>
+                ) : (
+                  'Load More Products'
+                )}
+              </button>
+            </div>
+          )}
         </section>
 
         {/* Student Perks */}
@@ -295,52 +633,9 @@ const Home = () => {
 
       </main>
 
-      {/* Footer */}
-      <footer className="bg-[#f7f9ff] border-t border-[#c3c6d7] mt-24">
-        <div className="w-full py-12 px-margin-mobile md:px-margin-desktop mt-auto flex flex-col md:flex-row justify-between items-start max-w-container-max mx-auto gap-12">
-          <div className="max-w-xs space-y-6">
-            <Link to="/" className="font-['Manrope'] text-2xl text-[#004ac6] tracking-tight font-extrabold block">UTEShop</Link>
-            <p className="text-sm text-[#434655] leading-relaxed">Elevating the multi-vendor experience with academic precision and soft aesthetics.</p>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-12 flex-grow">
-            <div className="space-y-4">
-              <h4 className="font-bold text-sm uppercase tracking-wider">Explore</h4>
-              <ul className="space-y-3 text-sm text-[#434655]">
-                <li><Link className="hover:text-[#004ac6] transition-all" to="#">New Arrivals</Link></li>
-                <li><Link className="hover:text-[#004ac6] transition-all" to="#">Featured Designers</Link></li>
-                <li><Link className="hover:text-[#004ac6] transition-all" to="#">Boutiques</Link></li>
-              </ul>
-            </div>
-            <div className="space-y-4">
-              <h4 className="font-bold text-sm uppercase tracking-wider">Company</h4>
-              <ul className="space-y-3 text-sm text-[#434655]">
-                <li><Link className="hover:text-[#004ac6] transition-all" to="#">About Us</Link></li>
-                <li><Link className="hover:text-[#004ac6] transition-all" to="#">Careers</Link></li>
-                <li><Link className="hover:text-[#004ac6] transition-all" to="#">Terms of Service</Link></li>
-              </ul>
-            </div>
-            <div className="col-span-2 md:col-span-1 space-y-4">
-              <h4 className="font-bold text-sm uppercase tracking-wider">Connect</h4>
-              <div className="flex gap-4">
-                <a className="w-10 h-10 flex items-center justify-center rounded-full bg-[#e1e4f5] text-[#434655] hover:bg-[#004ac6] hover:text-white transition-all shadow-sm" href="#"><span className="material-symbols-outlined text-[20px]">language</span></a>
-                <a className="w-10 h-10 flex items-center justify-center rounded-full bg-[#e1e4f5] text-[#434655] hover:bg-[#004ac6] hover:text-white transition-all shadow-sm" href="#"><span className="material-symbols-outlined text-[20px]">alternate_email</span></a>
-                <a className="w-10 h-10 flex items-center justify-center rounded-full bg-[#e1e4f5] text-[#434655] hover:bg-[#004ac6] hover:text-white transition-all shadow-sm" href="#"><span className="material-symbols-outlined text-[20px]">share</span></a>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="w-full px-margin-mobile md:px-margin-desktop py-6 border-t border-[#c3c6d7] max-w-container-max mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-sm text-[#434655]">© 2024 UTEShop Marketplace.</p>
-          <p className="font-bold opacity-30 uppercase tracking-widest text-[10px]">Academic Modernism Framework v1.0</p>
-        </div>
-      </footer>
+      <Footer />
 
-      {/* AI Chatbot FAB */}
-      <button className="fixed bottom-8 right-8 w-16 h-16 bg-[#004ac6] text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 transition-all z-50 group">
-        <span className="material-symbols-outlined text-3xl group-hover:hidden">smart_toy</span>
-        <span className="material-symbols-outlined text-3xl hidden group-hover:block">chat</span>
-        <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-[10px] font-bold flex items-center justify-center rounded-full ring-2 ring-white">1</span>
-      </button>
+      <FABGroup />
     </div>
   );
 };
