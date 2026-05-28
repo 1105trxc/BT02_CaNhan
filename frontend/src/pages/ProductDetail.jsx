@@ -274,16 +274,29 @@ const ProductDetail = () => {
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-4 gap-4">
-              {media?.length > 0 ? media.map((m, idx) => (
-                <button 
-                  key={idx} 
-                  onClick={() => setSelectedImage(m.mediaUrl)}
-                  className={`aspect-square rounded-2xl overflow-hidden border-2 transition-all ${selectedImage === m.mediaUrl ? 'border-primary opacity-100 scale-105 shadow-md' : 'border-outline-variant opacity-60 hover:opacity-100 hover:border-primary'}`}
-                >
-                  <img src={m.mediaUrl} className="w-full h-full object-cover" alt="" />
-                </button>
-              )) : null}
+            <div className="overflow-hidden relative w-full border border-outline-variant/30 rounded-3xl p-3 bg-white flex items-center">
+              <div className="animate-marquee flex">
+                {/* First set */}
+                {media?.length > 0 ? media.map((m, idx) => (
+                  <button 
+                    key={`set1-${idx}`} 
+                    onClick={() => setSelectedImage(m.mediaUrl)}
+                    className={`flex-shrink-0 w-24 h-24 mr-3 rounded-2xl overflow-hidden border-2 transition-all ${selectedImage === m.mediaUrl ? 'border-primary opacity-100 scale-105 shadow-md' : 'border-outline-variant opacity-60 hover:opacity-100 hover:border-primary'}`}
+                  >
+                    <img src={m.mediaUrl} className="w-full h-full object-cover" alt="" />
+                  </button>
+                )) : null}
+                {/* Duplicate set for seamless looping */}
+                {media?.length > 0 ? media.map((m, idx) => (
+                  <button 
+                    key={`set2-${idx}`} 
+                    onClick={() => setSelectedImage(m.mediaUrl)}
+                    className={`flex-shrink-0 w-24 h-24 mr-3 rounded-2xl overflow-hidden border-2 transition-all ${selectedImage === m.mediaUrl ? 'border-primary opacity-100 scale-105 shadow-md' : 'border-outline-variant opacity-60 hover:opacity-100 hover:border-primary'}`}
+                  >
+                    <img src={m.mediaUrl} className="w-full h-full object-cover" alt="" />
+                  </button>
+                )) : null}
+              </div>
             </div>
           </div>
 
@@ -292,7 +305,7 @@ const ProductDetail = () => {
             <div className="space-y-2">
               <p className="text-[12px] text-primary font-bold tracking-widest uppercase">{shop?.name || 'UTEShop Official Store'}</p>
               <h1 className="text-3xl font-extrabold text-on-surface leading-tight">{product.name}</h1>
-              <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1 text-secondary">
                   <span className="material-symbols-outlined text-[18px] text-amber-500" style={{fontVariationSettings: "'FILL' 1"}}>star</span>
                   <span className="font-bold">{product.averageRating || 'No ratings'}</span>
@@ -301,11 +314,6 @@ const ProductDetail = () => {
                 <span className="text-sm text-on-surface-variant underline cursor-pointer">{reviews?.length || 0} Reviews</span>
                 <span className="text-outline-variant">|</span>
                 <span className="text-sm text-on-surface-variant">{sold || 0} Sold</span>
-                <span className="text-outline-variant">|</span>
-                <div className="flex items-center gap-1 text-sm text-on-surface-variant" title="Total Views">
-                  <span className="material-symbols-outlined text-[16px] text-primary">visibility</span>
-                  <span>{product.viewCount || 0} Views</span>
-                </div>
               </div>
             </div>
 
@@ -648,7 +656,7 @@ const ProductDetail = () => {
                                               </div>
                                           )}
                                           <div>
-                                              <h4 className="font-bold text-on-surface">{r.user?.fullName || 'John Doe'}</h4>
+                                              <h4 className="font-bold text-on-surface">{r.user?.fullName || 'Anonymous'}</h4>
                                               <div className="flex text-primary text-[14px]">
                                                   {[...Array(5)].map((_, i) => (
                                                       <span key={i} className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: i < r.rating ? "'FILL' 1" : "'FILL' 0" }}>star</span>
@@ -656,20 +664,35 @@ const ProductDetail = () => {
                                               </div>
                                           </div>
                                       </div>
-                                      <span className="text-xs text-on-surface-variant">{new Date(r.createdAt).toLocaleDateString()}</span>
+                                      <span className="text-xs text-on-surface-variant">{new Date(r.createdAt).toLocaleDateString('en-US')}</span>
                                   </div>
-                                  <p className="text-sm text-on-surface-variant leading-relaxed">
-                                      {r.comment}
-                                  </p>
+                                  {r.comment && (
+                                    <p className="text-sm text-on-surface-variant leading-relaxed">{r.comment}</p>
+                                  )}
+                                  {/* Ảnh đính kèm review */}
+                                  {r.media && r.media.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                      {r.media.map((m, mi) => (
+                                        <a key={mi} href={m.url} target="_blank" rel="noopener noreferrer">
+                                          <img
+                                            src={m.url}
+                                            alt={`review-media-${mi}`}
+                                            className="w-16 h-16 rounded-xl object-cover border border-outline-variant/30 hover:opacity-90 hover:scale-105 transition-all cursor-pointer"
+                                          />
+                                        </a>
+                                      ))}
+                                    </div>
+                                  )}
                               </div>
                           )) : (
                               <div className="text-sm text-on-surface-variant italic py-8 text-center bg-surface-container-lowest rounded-2xl border border-outline-variant/30">
-                                  No reviews available for this product yet.
+                                  No reviews for this product yet.
                               </div>
                           )}
                       </div>
                   </div>
               </section>
+
 
               {/* Section 3: Shipping & Returns */}
               <section id="shipping" className="space-y-12 scroll-mt-32">
@@ -751,7 +774,14 @@ const ProductDetail = () => {
                                 <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest mb-1">{p.category?.name || 'Category'}</p>
                                 <h4 className="font-bold text-sm mb-2 line-clamp-2 min-h-[2.5rem] group-hover:text-primary transition-colors">{p.name}</h4>
                                 <div className="mt-auto flex items-center justify-between">
-                                    <p className="text-primary font-extrabold">{p.sellingPrice?.toLocaleString()}₫</p>
+                                    {p.mrpPrice > p.sellingPrice ? (
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-primary font-extrabold">{p.sellingPrice?.toLocaleString()}₫</span>
+                                        <span className="text-xs text-[#505f76] line-through">{p.mrpPrice?.toLocaleString()}₫</span>
+                                      </div>
+                                    ) : (
+                                      <p className="text-primary font-extrabold">{p.sellingPrice?.toLocaleString()}₫</p>
+                                    )}
                                     <button className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-all">
                                         <span className="material-symbols-outlined text-sm">add_shopping_cart</span>
                                     </button>

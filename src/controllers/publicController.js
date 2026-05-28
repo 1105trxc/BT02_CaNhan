@@ -1,6 +1,7 @@
 const Banner = require('../models/Banner');
 const Product = require('../models/Product');
 const ProductMedia = require('../models/ProductMedia');
+const ProductReviewMedia = require('../models/ProductReviewMedia');
 const Category = require('../models/Category');
 const Campaign = require('../models/Campaign');
 const CampaignTarget = require('../models/CampaignTarget');
@@ -72,7 +73,7 @@ exports.getHomepageData = async (req, res, next) => {
 
     let flashDeals = [];
     if (activeCampaigns.length > 0) {
-      const targets = await CampaignTarget.find({ campaign_id: activeCampaigns[0]._id }).limit(10);
+      const targets = await CampaignTarget.find({ campaign_id: activeCampaigns[0]._id }).limit(4);
       const productIds = targets.map(t => t.product_id.toString());
       flashDeals = allWithRating.filter(p => productIds.includes(p._id.toString()));
     }
@@ -113,6 +114,16 @@ exports.getProductDetail = async (req, res, next) => {
   try {
     const { slug } = req.params;
 
+    // Kiểm tra cache chống StrictMode gọi 2 lần hoặc spam refresh (cooldown 3 giây)
+    const clientIp = req.ip || req.connection?.remoteAddress || 'unknown';
+    const cacheKey = `${clientIp}_${slug}`;
+    const now = Date.now();
+
+    if (!viewedCache.has(cacheKey) || (now - viewedCache.get(cacheKey) > 3000)) {
+      await Product.findOneAndUpdate({ slug }, { $inc: { view_count: 1 } });
+      viewedCache.set(cacheKey, now);
+    }
+
     // 1. Fetch Product
     const product = await Product.findOne({ slug, approval_status: 'approved', is_active: true });
     if (!product) {
@@ -123,16 +134,6 @@ exports.getProductDetail = async (req, res, next) => {
         data: null,
         timestamp: Math.floor(Date.now() / 1000)
       });
-    }
-
-    // Kiểm tra cache chống StrictMode gọi 2 lần hoặc spam refresh (cooldown 3 giây)
-    const clientIp = req.ip || req.connection?.remoteAddress || 'unknown';
-    const cacheKey = `${clientIp}_${slug}`;
-    const now = Date.now();
-
-    if (!viewedCache.has(cacheKey) || (now - viewedCache.get(cacheKey) > 3000)) {
-      await Product.findOneAndUpdate({ slug }, { $inc: { view_count: 1 } });
-      viewedCache.set(cacheKey, now);
     }
 
     // 2. Fetch Shop with more stats & calculate shop rating dynamically
@@ -180,7 +181,7 @@ exports.getProductDetail = async (req, res, next) => {
     ]);
     const totalSold = soldData.length > 0 ? soldData[0].totalSold : 0;
 
-    // 7. Fetch Reviews with better details
+    // 7. Fetch Reviews with media
     const reviews = await ProductReview.find({ product_id: product._id })
       .populate('user_id', 'full_name avatar_url')
       .sort({ createdAt: -1 });
@@ -188,6 +189,22 @@ exports.getProductDetail = async (req, res, next) => {
     const avgRating = reviews.length > 0 
       ? Number((reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1))
       : 5.0;
+
+    // Đính kèm media (ảnh) của từng review
+    const reviewsWithMedia = await Promise.all(reviews.map(async (r) => {
+      const reviewMedia = await ProductReviewMedia.find({ product_review_id: r._id });
+      return {
+        id: r._id,
+        rating: r.rating,
+        comment: r.comment,
+        createdAt: r.createdAt,
+        user: r.user_id ? {
+          fullName: r.user_id.full_name,
+          avatarUrl: r.user_id.avatar_url
+        } : { fullName: 'Ẩn danh' },
+        media: reviewMedia.map(m => ({ url: m.media_url, type: m.media_type }))
+      };
+    }));
 
     // 8. Fetch Related Products (Same category, approved, not current)
     const relatedProductsRaw = await Product.find({ 
@@ -242,16 +259,7 @@ exports.getProductDetail = async (req, res, next) => {
         variants,
         stock: totalStock,
         sold: totalSold,
-        reviews: reviews.map(r => ({
-          id: r._id,
-          rating: r.rating,
-          comment: r.comment,
-          createdAt: r.createdAt,
-          user: r.user_id ? {
-            fullName: r.user_id.full_name,
-            avatarUrl: r.user_id.avatar_url
-          } : { fullName: 'Anonymous' }
-        })),
+        reviews: reviewsWithMedia,
         relatedProducts
       }),
       timestamp: Math.floor(Date.now() / 1000)
@@ -354,7 +362,6 @@ exports.searchProducts = async (req, res, next) => {
         averageRating: avgRating,
         reviewCount: reviews.length,
         soldCount: totalSold,
-        viewCount: pObj.view_count || Math.floor(Math.random() * 500) + 50,
         media: media.map(m => m.media_url),
         category: cat,
         variants
